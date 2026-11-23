@@ -92,7 +92,7 @@ class UpdatesState {
   }
 
   async install() {
-    if (!this.update || this.downloading || this.installing) return;
+    if (!this.update || this.checking || this.downloading || this.installing) return;
 
     this.downloading = true;
     this.installing = false;

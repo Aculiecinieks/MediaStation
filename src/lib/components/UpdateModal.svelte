@@ -40,6 +40,7 @@
             </div>
           {:else}
             <button class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 18px;"
+              disabled={updatesState.checking}
               onclick={() => updatesState.install()}>
               Download and install
             </button>
