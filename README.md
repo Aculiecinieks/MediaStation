@@ -44,4 +44,8 @@ npm run tauri build
 
 ## Releases
 
-Push a version tag such as `v1.1.0`. GitHub Actions builds the Windows installer and publishes it with the updater manifest.
+1. Bump the version in `package.json` and `src-tauri/tauri.conf.json`.
+2. Commit and push.
+3. Push a tag such as `v1.1.1`.
+
+GitHub Actions builds the Windows installer and publishes it with the updater manifest.

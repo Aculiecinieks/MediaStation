@@ -17,6 +17,8 @@ Update rules: update LAST only if contracts/features change or trap found (skip 
 - **Build Rules**: Vite `build.target = "es2021"`, dev port 1420 strict; window 1280×720 (min 940×560); NSIS x64.
 - **CSP**: `script-src` self + `wasm-unsafe-eval` + `cdn.jsdelivr.net` + `youtube.com`; `connect-src`/`media-src` allow `https:` + `blob:`; `frame-src` YouTube.
 - **Settings**: model/precision/GPU persisted in `localStorage` key `mediastation_settings`; Reset Defaults disposes transcriber.
+- **Updates**: Tauri updater checks GitHub `latest.json` on launch + 6h; header badge opens download/install modal; Windows installer restarts app.
+- **Release**: push tag `v<version>`; GitHub Actions builds NSIS, signature, `latest.json`; keep `package.json` + `tauri.conf.json` versions equal.
 - **Toolchain**: Rust MSVC + VS2019 BuildTools; cargo at `%USERPROFILE%\.cargo\bin`; npm postinstall blocked by allow-scripts (esbuild via optional platform package).
 - **Reference Only**: `unused/` excluded from build — `VideoStationVisualizer2.html` legacy behavioral truth, `ui-mockup.html` Settings design, `media_station_save.json` load fixture.
 - **Repo**: GitHub `Aculiecinieks/MediaStation` (public, `master`); releases built by `.github/workflows/release.yml` on `v*` tags.
@@ -29,6 +31,7 @@ Update rules: update LAST only if contracts/features change or trap found (skip 
 - **`src/lib/stores/player.svelte.ts`**: playback. Owns: `loadVideo` token, subtitle `<track>`, YouTube branch, URL revocation, seek/speed/fullscreen, autoplay.
 - **`src/lib/stores/save.svelte.ts`**: save lifecycle. Owns: `quickSave`, `saveAs` (new namespace), `loadSaveFile`, `closeSaveFile`, `ensureHandleNamespace`, dirty flag.
 - **`src/lib/stores/settings.svelte.ts`**: AI engine settings. Owns: `currentModel` (default `onnx-community/whisper-tiny.en`), `currentPrecision`, `useGPU`, persistence.
+- **`src/lib/stores/updates.svelte.ts`**: updater state. Owns: check on launch/interval, available version/notes, download progress, install.
 - **`src/lib/stores/ui.svelte.ts`**: UI singleton. Owns: modal/menu flags, `showConfirmModal` promise, AI overlay + `aiRunId`, permission resolver.
 - **`src/lib/services/savefile.ts`**: SaveFile v3 serialize/restore. Owns: validation, key migration, aligned handles, folder repair, link/manual-subtitle restore.
 - **`src/lib/services/db.ts`**: IndexedDB handle store. Owns: `initDB`, get/store/delete handle, `validateDirectoryHandle`, `promptDirectoryRepair`.
@@ -46,6 +49,7 @@ Update rules: update LAST only if contracts/features change or trap found (skip 
 - **`src/lib/components/playlist/ProgressBar.svelte`**: library progress. Owns: `libraryStats()` percent/watched/remaining.
 - **`src/lib/components/player/Player.svelte`**: video surface. Owns: element binding, controls hide, hold-mouse 2x, YouTube quality.
 - **`src/lib/components/player/VideoInfo.svelte`**: title/status/annotation textarea → `groupsState.updateAnnotation`.
+- **`src/lib/components/UpdateModal.svelte`**: update panel. Owns: version/notes, download progress, install, recheck.
 - **`src/lib/components/modals/SettingsModal.svelte`**: AI settings. Owns: model/precision grids, GPU, cache clear, reset, version.
 - **`src/lib/components/modals/SyncModal.svelte`**: subtitle/link editor. Owns: manual assign, local import, YouTube captions, link edit, remove.
 - **`src/lib/components/modals/`** (other): `AddLinkModal`, `ColorPickerModal`, `ConfirmModal`.
@@ -55,7 +59,8 @@ Update rules: update LAST only if contracts/features change or trap found (skip 
 - **`src/lib/types.ts` / `constants.ts` / `utils.ts`**: contracts. Owns: `VideoItem`/`Group`/`SaveFile`, extension sets, model catalog, formatters.
 - **`src/lib/main.ts` / `src/App.svelte`**: boot. Owns: mount, fatal overlay, hotkeys/YouTube init, auto-restore, beforeunload, `VITE_USE_FIXTURES`.
 - **`src/lib/fixtures/sampleSave.ts`**: `VITE_USE_FIXTURES=true` demo library.
-- **`src-tauri/tauri.conf.json`**: window/CSP/bundle; `src-tauri/capabilities/default.json`.
+- **`src-tauri/tauri.conf.json`**: window/CSP/bundle/updater; `src-tauri/capabilities/default.json` grants `updater:default`.
+- **`.github/workflows/release.yml`**: tag release pipeline. Owns: Windows build, updater signing, release assets + `latest.json`.
 - **`index.html` / `src/app.css`**: font links + `#app`; theme tokens + layout.
 
 ### Events & APIs
@@ -99,6 +104,10 @@ Update rules: update LAST only if contracts/features change or trap found (skip 
 - **YouTube Readiness**: API loads async and iframes get detached → queue IDs until `apiReady`, reset player on leaving player mode.
 - **Load Token**: `loadVideo` awaits `tick`/subtitle read → stale continuations must return via `loadToken` before mutating state.
 - **CSP Inline Script Block**: `script-src 'self'` rejects inline module code → load remote libs via `import(/* @vite-ignore */ CDN_URL)` + whitelist CDN.
+- **Updater Key Loss**: losing `~/.tauri/mediastation.key` blocks all future updates → back up private key, keep CI secret, never commit.
+- **Updater Manifest**: `latest.json` must be latest-release asset with `windows-x86_64` signature/url → keep `uploadUpdaterJson` + `updaterJsonPreferNsis`.
+- **Version Bump**: `package.json` and `tauri.conf.json` must match tag semver → lower/equal versions are silently ignored by updater.
+- **Update Check Guard**: skip checks while downloading/installing → closing the `Update` resource mid-download breaks install.
 - **Vite Build Target**: `build.target = "esnext"` emits syntax old WebView2 cannot parse (CSS loads, app never mounts) → keep `es2021`.
 - **Fatal Error Overlay**: red monospace text on dark = `showFatalError` caught `error`/`unhandledrejection`/mount failure → read stack, fix root cause.
 - **Hold-Mouse 2x Click**: long-press sets 2x; release sets `ignoreNextClick` for 100ms → keep guard or release fires click-pause.
