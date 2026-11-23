@@ -1,0 +1,105 @@
+# MEMORY.md
+
+Update rules: update LAST only if contracts/features change or trap found (skip for routine edits). If updating: load caveman-ultra if available (file content only), mutate in-place, max 2 lines/bullet, max 1 indent level. Gotchas = positive rules only ([Trap] → [Rule]). No bug stories, no dates/milestones.
+
+### Context & Invariants
+- **Media Station**: local-first video library/player/subtitle manager → Tauri 2 (WebView2) + Svelte 5 runes + TypeScript. Windows x64 only.
+- **Runtime Split**: all logic in frontend; Rust `src-tauri/src/lib.rs` = `tauri::Builder::default().run(...)` passthrough, zero custom commands. Only Tauri API: `getVersion` (`core:default`).
+- **State Model**: 5 rune singletons → `groupsState` tree/videos/durations, `playerState` playback, `saveState` handle/dirty/namespace, `uiState` modals/AI/permissions, `settingsState` AI engine.
+- **Persistence**: SaveFile v3 JSON via File System Access API; IndexedDB `VideoPlayerDB` v1 store `directoryHandles`; keys namespaced by `saveState.handleNamespace`; `currentSaveFile` auto-restored on mount.
+- **Saved Fields**: links (`isLink`/`url`), annotations, `masterColor`, manual subtitle text (`customSubtitleFiles`), `subtitleRemoved`, per-video handles (aligned with videos), completed indexes.
+- **Permission Gate**: restore migrates keys, then `checkAndRequestPermissions`; directory matchRate < 0.5 → repair picker; handles fallback when permission denied.
+- **Subtitle Priority**: `manualSync` → exact base → prefix with `[ _-(]` separator → substring. `stripExtension` handles any video extension.
+- **Master Groups**: flat `videoGroups` + master `children: number[]`; render via `rootGroups()`; masters hold zero videos and stay root-level.
+- **Media Path**: local `File` → `URL.createObjectURL` into `<video>`; YouTube id link → iframe `#youtube-player`; other link → direct `src`.
+- **Extensions**: `VIDEO_EXTENSIONS` = mp4/m4v/mkv/webm/ogg; `SUBTITLE_EXTENSIONS` = srt/vtt; all checks case-insensitive.
+- **Commands**: dev `npm run tauri dev`; typecheck `npm run check`; release `npm run tauri build` → `src-tauri/target/release/bundle/nsis/MediaStation_*_x64-setup.exe`.
+- **Build Rules**: Vite `build.target = "es2021"`, dev port 1420 strict; window 1280×720 (min 940×560); NSIS x64.
+- **CSP**: `script-src` self + `wasm-unsafe-eval` + `cdn.jsdelivr.net` + `youtube.com`; `connect-src`/`media-src` allow `https:` + `blob:`; `frame-src` YouTube.
+- **Settings**: model/precision/GPU persisted in `localStorage` key `mediastation_settings`; Reset Defaults disposes transcriber.
+- **Toolchain**: Rust MSVC + VS2019 BuildTools; cargo at `%USERPROFILE%\.cargo\bin`; npm postinstall blocked by allow-scripts (esbuild via optional platform package).
+- **Reference Only**: `unused/` excluded from build — `VideoStationVisualizer2.html` legacy behavioral truth, `ui-mockup.html` Settings design, `media_station_save.json` load fixture.
+- **Repo**: GitHub `Aculiecinieks/MediaStation` (public, `master`); releases built by `.github/workflows/release.yml` on `v*` tags.
+- **Deep Specs**:
+  - **`PLAN.md`**: read ONLY if tracing migration intent (historical source, never current behavior).
+
+### Scripts & Feature Ownership
+- **`src/lib/stores/groups.svelte.ts`**: library model + mutations. Owns: master groups, move/reorder, deletes, completion, duration remap, stats, selection.
+  - Moves reject master sources/targets; remap `completed`, durations, selection, playhead.
+- **`src/lib/stores/player.svelte.ts`**: playback. Owns: `loadVideo` token, subtitle `<track>`, YouTube branch, URL revocation, seek/speed/fullscreen, autoplay.
+- **`src/lib/stores/save.svelte.ts`**: save lifecycle. Owns: `quickSave`, `saveAs` (new namespace), `loadSaveFile`, `closeSaveFile`, `ensureHandleNamespace`, dirty flag.
+- **`src/lib/stores/settings.svelte.ts`**: AI engine settings. Owns: `currentModel` (default `onnx-community/whisper-tiny.en`), `currentPrecision`, `useGPU`, persistence.
+- **`src/lib/stores/ui.svelte.ts`**: UI singleton. Owns: modal/menu flags, `showConfirmModal` promise, AI overlay + `aiRunId`, permission resolver.
+- **`src/lib/services/savefile.ts`**: SaveFile v3 serialize/restore. Owns: validation, key migration, aligned handles, folder repair, link/manual-subtitle restore.
+- **`src/lib/services/db.ts`**: IndexedDB handle store. Owns: `initDB`, get/store/delete handle, `validateDirectoryHandle`, `promptDirectoryRepair`.
+- **`src/lib/services/fsAccess.ts`**: pickers + permissions. Owns: folder/file import, subtitle folder sync, `confirmAddLink`, permission flow.
+- **`src/lib/services/subtitles.ts`**: subtitle resolution. Owns: `getSubtitle` tiers, extension strip, save/remove, key matching.
+- **`src/lib/services/ai.ts`**: Whisper + YouTube captions. Owns: transcriber lifecycle/dtype, generation runs, cache clear, XML→VTT.
+- **`src/lib/services/youtube.ts`**: YouTube iframe. Owns: API queue, player create/reset/load, progress sync.
+- **`src/lib/services/transformers.ts`**: CDN loader. Owns: `ensureTransformers` dynamic import → `window.transformersPipeline`.
+- **`src/lib/contextMenus.ts`**: context menus. Owns: group/video items, batch actions, selection scoping, confirm-before-destroy.
+- **`src/lib/hotkeys.ts`**: global input. Owns: hotkeys, Escape/menu close, subtitle drop matching via `dnd.dropTarget`.
+- **`src/lib/dnd.ts`**: drag payload. Owns: `video` / `video-batch` / `group` source union.
+- **`src/lib/components/Header.svelte`**: top bar. Owns: settings, Save/Add Videos menus, subtitles picker, autoplay, save status.
+- **`src/lib/components/playlist/GroupCard.svelte`**: recursive group card. Owns: collapse/rename/selection, group drag zones, color dot.
+- **`src/lib/components/playlist/VideoRow.svelte`**: video row. Owns: selection, video drag, SYNC, completion, CC/Link chips.
+- **`src/lib/components/playlist/ProgressBar.svelte`**: library progress. Owns: `libraryStats()` percent/watched/remaining.
+- **`src/lib/components/player/Player.svelte`**: video surface. Owns: element binding, controls hide, hold-mouse 2x, YouTube quality.
+- **`src/lib/components/player/VideoInfo.svelte`**: title/status/annotation textarea → `groupsState.updateAnnotation`.
+- **`src/lib/components/modals/SettingsModal.svelte`**: AI settings. Owns: model/precision grids, GPU, cache clear, reset, version.
+- **`src/lib/components/modals/SyncModal.svelte`**: subtitle/link editor. Owns: manual assign, local import, YouTube captions, link edit, remove.
+- **`src/lib/components/modals/`** (other): `AddLinkModal`, `ColorPickerModal`, `ConfirmModal`.
+- **`src/lib/components/PermissionDialog.svelte`**: batch grant UI. Owns: per-handle grant, Grant Next, Continue/Skip → resolves restore.
+- **`src/lib/components/AiLoadingOverlay.svelte`**: AI overlay. Owns: spinner/elapsed/cancel + `aiError`.
+- **`src/lib/components/ContextMenu.svelte`**: renders `uiState.contextMenu` at clamped position.
+- **`src/lib/types.ts` / `constants.ts` / `utils.ts`**: contracts. Owns: `VideoItem`/`Group`/`SaveFile`, extension sets, model catalog, formatters.
+- **`src/lib/main.ts` / `src/App.svelte`**: boot. Owns: mount, fatal overlay, hotkeys/YouTube init, auto-restore, beforeunload, `VITE_USE_FIXTURES`.
+- **`src/lib/fixtures/sampleSave.ts`**: `VITE_USE_FIXTURES=true` demo library.
+- **`src-tauri/tauri.conf.json`**: window/CSP/bundle; `src-tauri/capabilities/default.json`.
+- **`index.html` / `src/app.css`**: font links + `#app`; theme tokens + layout.
+
+### Events & APIs
+- **Tauri IPC**: none custom; `getVersion()` (`SettingsModal`→Tauri core) → version string.
+- **`getSaveDataAsync`** (`saveState`→`savefile.ts`): `()` → `SaveFile` v3 incl. `handleNamespace`; migrates directory/subtitle/file keys.
+- **`restoreState`** (`App`/`saveState`→`savefile.ts`): `(SaveFile)` → validate, migrate keys, permission gate, rebuild, load/clear playback; throws on invalid.
+- **`ensureHandleNamespace`** (`fsAccess`/`savefile`→`saveState`): `()` → stable library namespace for IndexedDB keys.
+- **`checkAndRequestPermissions`** (`restoreState`→`fsAccess.ts`): `(Group[])` → dialog for ungranted handles; resolves on close.
+- **`getSubtitle`** (`player`/`VideoRow`/`SyncModal`→`subtitles.ts`): `(group, filename)` → `Blob|File|null`; prefix tier before substring.
+- **`saveSubtitleToGroup`** (`ai`/`SyncModal`/drop→`subtitles.ts`): `(group, videoIndex, vtt)` → `customSubtitleFiles[base]` + `manualSync[base]`.
+- **`uiState.showConfirmModal`** (any→`ui.svelte.ts`): `(message, confirmText?, 'danger'|'primary')` → `Promise<boolean>`; deletes await it.
+- **`uiState.showAI` / `cancelAI`** (`ai.ts`→`ui.svelte.ts`): `(status)` → bumps `aiRunId`; cancel sets `aiCancelRequested`.
+- **`storeDirectoryHandle` / `getHandleFromDB`** (`services`→`db.ts`): `(key, value)` / `(key)` → IndexedDB `directoryHandles`; silent no-op when DB uninit.
+- **`ensureTransformers`** (`ai.ts`→`transformers.ts`): `()` → jsdelivr `@huggingface/transformers@3.8.1` → `window.transformersPipeline`.
+- **`loadYouTubeVideo` / `resetYoutubePlayer`** (`player`→`youtube.ts`): `(id)` → queue/create/load iframe; reset destroys detached player.
+- **`registerHotkeys`** (`App.onMount`): `()` → keydown/keyup/click/drop listeners.
+- **External**: `https://www.youtube.com/api/timedtext?v=<id>&lang=en` → caption XML; Google Fonts; jsdelivr module + models.
+
+### Gotchas & Active Traps
+- **`$state` Proxy Semantics**: proxy writes live in signals, not raw targets; reassign `Set`/`Map` or use `SvelteSet`/`SvelteMap` → always read/mutate through store proxies.
+- **Handle Key Deletion**: saved JSON references IndexedDB keys → never delete resource keys on close/load/group delete; namespace with `handleNamespace`.
+- **Handle Key Format**: `video_dir|subtitle_dir|video_handles_<namespace>_<groupId>`; legacy keys migrate on load/save, old keys stay valid.
+- **Master Video Drop**: masters hold no videos → `moveVideo`/`moveVideosBatch` reject master targets; master cards must not accept video payloads.
+- **Selection Scope**: `selectedIndices` valid only for `playerState.currentGroup` → check before batch menu/delete/move, clear on group switch/delete.
+- **Save Validation Order**: malformed v3 must throw before mutating → validate groups/ids/videos before clearing library; auto-load handle set only after success.
+- **Empty Folder Group**: `videos: []` means intentionally empty → only a missing `videos` field triggers full directory import.
+- **Aligned Handles**: store `videoHandles` aligned with `videos` including nulls → restore by index; name maps break same-named files.
+- **Handle Null Entries**: permission loops must skip null entries → one null otherwise aborts checks for every later handle in the array.
+- **New Group Selection**: `createNewGroup` clears `selectedIndices` → imports assign `currentGroup` before `loadVideo`, so selection survives otherwise.
+- **Folder Validation Scope**: validate only names without handles → also prompt when folder/scan unavailable; allow partial repair when all handles exist.
+- **Subtitle Removal Flag**: `subtitleRemoved[base]` blocks `getSubtitle` → set on remove, clear in `saveSubtitleToGroup`, persist in save; keep flags for missing videos.
+- **Subtitle Move Ownership**: use `subtitleKeyOwner` longest-base match → move/delete only keys owned by moved video; copy resolved to `manualSync[base]`.
+- **Link Rename Ownership**: rename only keys owned by edited video; persist resolved text; honor `subtitleRemoved` → never resurrect removed subtitles.
+- **Duration Epochs**: clear duration generations on close/restore → in-flight probes from old groups can otherwise write stale durations.
+- **Drop Target Routing**: OS file drops bubble to document with `dnd.dropTarget` → ancestors preserve existing target; first subtitle per video wins.
+- **Link Durations**: `loadDurations` must not clear link keys → remap durations before probing; probe callbacks check generation.
+- **Subtitle Tier Order**: `getSubtitle` needs exact → prefix loop → substring loop; a combined matcher changes priority.
+- **Subtitle Extension Base**: strip final extension, not `.mp4` → `.mkv`/`.m4v` subtitles otherwise never match.
+- **AI Missing Video**: `createObjectURL` throws on `MissingVideo` → guard/omit menu action; URL prep stays inside `try`/`finally`.
+- **AI Run Race**: `aiRunId` can change mid-flight → check before save/hide/fail; never hide a newer overlay.
+- **YouTube Readiness**: API loads async and iframes get detached → queue IDs until `apiReady`, reset player on leaving player mode.
+- **Load Token**: `loadVideo` awaits `tick`/subtitle read → stale continuations must return via `loadToken` before mutating state.
+- **CSP Inline Script Block**: `script-src 'self'` rejects inline module code → load remote libs via `import(/* @vite-ignore */ CDN_URL)` + whitelist CDN.
+- **Vite Build Target**: `build.target = "esnext"` emits syntax old WebView2 cannot parse (CSS loads, app never mounts) → keep `es2021`.
+- **Fatal Error Overlay**: red monospace text on dark = `showFatalError` caught `error`/`unhandledrejection`/mount failure → read stack, fix root cause.
+- **Hold-Mouse 2x Click**: long-press sets 2x; release sets `ignoreNextClick` for 100ms → keep guard or release fires click-pause.
+- **PowerShell npm Start-Process**: `Start-Process "npm"` resolves `npm.ps1` → "Open with" dialog; run npm inline or `node` + explicit script path.

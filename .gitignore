@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+unused/
+.smart-coding-cache/
+mediastation.exe.lnk
+*.key
+*.pem
+*.log
+.env
+.env.*
+Thumbs.db
+.DS_Store

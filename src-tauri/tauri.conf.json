@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MediaStation",
+  "version": "1.1.0",
+  "identifier": "com.mediastation.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Media Station",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 940,
+        "minHeight": 560,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' ipc: http://ipc.localhost tauri: https: blob: data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIzNDM5OTA3NDk4OUU3MDUKUldRRjU0bEpCNWxEczh6bWZ0KzNYZTNNUkVLQVlRcG1NbVkxQkhGS1lOc2pFOVhoSm5ESFRHclQK",
+      "endpoints": [
+        "https://github.com/Aculiecinieks/MediaStation/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
