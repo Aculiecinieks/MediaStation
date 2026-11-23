@@ -1,4 +1,6 @@
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
+import { saveState } from './save.svelte';
+import { uiState } from './ui.svelte';
 
 function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -93,6 +95,14 @@ class UpdatesState {
 
   async install() {
     if (!this.update || this.checking || this.downloading || this.installing) return;
+
+    if (saveState.hasUnsavedChanges) {
+      const confirmed = await uiState.showConfirmModal(
+        'You have unsaved changes. Install the update and restart?',
+        'Install', 'primary'
+      );
+      if (!confirmed) return;
+    }
 
     this.downloading = true;
     this.installing = false;

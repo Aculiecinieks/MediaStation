@@ -1,6 +1,6 @@
 [package]
 name = "mediastation"
-version = "1.1.1"
+version = "1.1.2"
 description = "Media Station"
 edition = "2021"
 
