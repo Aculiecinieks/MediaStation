@@ -91,8 +91,8 @@
 <SyncModal />
 <AddLinkModal />
 <ColorPickerModal />
+<UpdateModal />
 <ConfirmModal />
 <PermissionDialog />
 <ContextMenu />
 <AiLoadingOverlay />
-<UpdateModal />
